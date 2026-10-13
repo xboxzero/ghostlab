@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghost Lab</title>
+<meta name="description" content="A 4D encyclopaedia of 350+ ghosts from around the world, wired into a modular techno synthesizer you play as a game.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23e8e0f0' d='M3 15V7a5 5 0 0 1 10 0v8l-2-2-2 2-1-2-1 2-2-2z'/%3E%3Crect x='5' y='6' width='2' height='3' fill='%23ff3048'/%3E%3Crect x='9' y='6' width='2' height='3' fill='%23ff3048'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="world"></canvas>
+<div id="tooltip"></div>
+
+<header id="hud">
+  <div class="logo"><span>GHOST</span> LAB</div>
+  <div class="dial" title="The 4th dimension: turn the Chronos Dial to travel through the ages. Only spirits of the current age can be bound. ( [ and ] keys )">
+    <label for="era">CHRONOS</label>
+    <input id="era" type="range" min="0" max="6" step="1">
+    <span id="era-name"></span>
+  </div>
+  <div class="transport">
+    <button id="play" title="Play / stop (Space)">▶ PLAY</button>
+    <span id="beat"></span>
+    <button id="bpm-down" class="sm" aria-label="Slower">−</button>
+    <input id="bpm" type="number" min="70" max="180" aria-label="BPM"><span class="unit">BPM</span>
+    <button id="bpm-up" class="sm" aria-label="Faster">+</button>
+    <button id="rec" class="sm" title="Record the séance">●</button>
+  </div>
+  <div id="souls-box" title="Souls: earned every bar while music plays. Spend them to bind ghosts."><i class="soul-ico"></i><span id="souls">0</span></div>
+  <nav>
+    <button data-panel="codex" title="Codex (C)">CODEX</button>
+    <button data-panel="lab" title="Lab (L)">LAB <small id="bound-count"></small></button>
+    <button data-panel="rites" title="Rites (R)">RITES <small id="rite-count"></small></button>
+    <button data-panel="help" title="How to play (H)">?</button>
+  </nav>
+</header>
+
+<aside id="codex" class="panel">
+  <div class="phead"><h2>THE CODEX</h2><button class="x" data-close="codex" aria-label="Close">✕</button></div>
+  <div class="filters">
+    <input data-q type="search" placeholder="Search the restless dead…">
+    <div class="row"><select data-realm aria-label="Realm"></select><select data-class aria-label="Class"></select></div>
+    <label class="chk"><input data-age type="checkbox"> Only spirits of the current age</label>
+  </div>
+  <div class="count"></div>
+  <div class="list"></div>
+  <div class="entry"></div>
+</aside>
+
+<section id="lab" class="panel">
+  <div class="phead">
+    <h2>THE LAB</h2>
+    <div class="routing"></div>
+    <button class="x" id="lab-size" title="Resize">⇕</button>
+    <button class="x" data-close="lab" aria-label="Close">✕</button>
+  </div>
+  <div class="labbody">
+    <div class="board"><svg class="cables"></svg></div>
+    <div class="inspector"></div>
+  </div>
+</section>
+
+<aside id="rites" class="panel">
+  <div class="phead"><h2>RITES</h2><button class="x" data-close="rites" aria-label="Close">✕</button></div>
+  <p class="hint">Fulfil rites to earn souls. Souls bind new spirits.</p>
+  <div class="rlist"></div>
+  <button id="reset" class="danger">Erase save & begin anew</button>
+</aside>
+
+<div id="help" class="panel modal">
+  <div class="phead"><h2>HOW TO PLAY</h2><button class="x" data-close="help" aria-label="Close">✕</button></div>
+  <ol>
+    <li><b>Press ▶ PLAY</b> (or Space). Your Lab already holds a Ritual Drum and three ghosts. Each ghost is an instrument.</li>
+    <li><b>Earn souls</b>: every bar of music feeds the Bonfire. More connected ghosts, longer <b>serial chains</b> and more realms = more souls.</li>
+    <li><b>Explore the world</b>: drag to look, scroll to zoom, WASD to walk. Each realm's shrine holds its ghosts. Rings around the Bonfire are <b>ages of time</b> — the outer rings are the oldest.</li>
+    <li><b>Turn the Chronos Dial</b> to travel through time. Only ghosts of the current age shine and can be bound.</li>
+    <li><b>Click a ghost</b> to open its Codex page. Read its lore, hear its voice, then <b>Bind</b> it with souls.</li>
+    <li><b>Patch</b> in the Lab: drag from a ghost's right <span class="dot out"></span> port to another's left <span class="dot in"></span> port.
+      <br>→ <b>Serial</b>: A → B → Bonfire. A is played <i>through</i> B's filter and effect.
+      <br>→ <b>Parallel</b>: A → Bonfire, B → Bonfire. Each heard on its own.
+      <br>Click a cable to cut it. Select a ghost to tweak volume, cutoff, effect, its <i>Haunt</i> and its 16-step sequence.</li>
+    <li><b>Fulfil Rites</b> for big soul rewards. Record your séance with ●.</li>
+  </ol>
+  <p class="hint">Keys: Space play · C codex · L lab · R rites · [ ] change age · Esc close</p>
+</div>
+
+<div id="banner"></div>
+<div id="toasts"></div>
+
+<div id="title">
+  <div class="t-inner">
+    <div class="t-small">AN ENCYCLOPAEDIA OF THE RESTLESS DEAD</div>
+    <h1>GHOST&nbsp;LAB</h1>
+    <div class="t-sub"><span id="total"></span> spirits · 8 realms · 7 ages · one bonfire</div>
+    <button id="start">PRESS START</button>
+    <div class="t-foot">Headphones advised. Sound begins when you press start.</div>
+  </div>
+</div>
+
+<noscript><p style="color:#ddd;padding:2em">Ghost Lab needs JavaScript and WebGL.</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
