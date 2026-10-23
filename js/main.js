@@ -9,6 +9,7 @@ import { Analog } from './analog.js';
 import { Game, RITES } from './game.js';
 import { GENRES_SORTED, genreById, SCALES } from './genres.js';
 import { GENRE_WIKI } from './genre-wiki.js';
+import { summonAll } from './portrait.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -55,6 +56,7 @@ const codex = new Codex($('#codex'), {
   era: () => game.s.era,
   seen: () => game.s.seen,
   isBound: id => game.isBound(id),
+  ready: () => summonedAll,
   onSeen: id => { game.markSeen(id); afterAction(); },
   bind: id => bindGhost(id),
   travel: era => setEra(era),
@@ -126,6 +128,7 @@ function togglePanel(name, force) {
   if (name === 'sound' && on) renderSound();
   if (name === 'mixer' && on && mixer) mixer.render();
   if (name === 'analog' && on && analog) analog.render($('#analog .an-body'));
+  if (name === 'codex' && !on) codex.close();
   // the lab and mixer share the bottom of the screen
   if (on && name === 'mixer') togglePanel('lab', false);
   if (on && name === 'lab' && $('#mixer').classList.contains('open')) togglePanel('mixer', false);
@@ -194,6 +197,7 @@ addEventListener('keydown', e => {
   if (e.key === 'h' || e.key === '?') togglePanel('help');
   if (e.key === '[') setEra(Math.max(0, game.s.era - 1));
   if (e.key === ']') setEra(Math.min(6, game.s.era + 1));
+  if (e.key === 'p' && lab) panic();
   if (e.key === 'Escape') ['codex', 'rites', 'help', 'sound', 'analog'].forEach(p => togglePanel(p, false));
   const perf = PERF.find(p => p[2] === e.key);
   if (perf && mixer && !e.repeat) mixer.perf(perf[0], true);
@@ -202,6 +206,8 @@ addEventListener('keyup', e => {
   const perf = PERF.find(p => p[2] === e.key);
   if (perf && mixer) mixer.perf(perf[0], false);
 });
+
+function panic() { engine.panic(); toast('All effects reset — feedback cleared.'); }
 
 // ---------- binding ----------
 function bindGhost(id) {
@@ -285,8 +291,9 @@ function startLab() {
   else for (const id of engine.modules.keys()) engine.connect(id, 'master');
   for (const [id, m] of engine.modules) if (m.muted) lab.nodes.get(id)?.el.classList.add('muted');
 
+  engine.onPanic = () => toast('Feedback detected — effects were reset to protect your ears.', 'warn');
   mixer = new Mixer($('#mixer'), engine, {
-    toast, record,
+    toast, record, panic,
     onChange: () => afterAction(),
     onSolo: () => { game.s.flags.solo = true; afterAction(); },
     onPerf: () => { if (engine.playing) { game.s.flags.perf = true; afterAction(); } },
@@ -326,6 +333,23 @@ function floatSouls(n) {
   $('#souls-box').appendChild(el);
   setTimeout(() => el.remove(), 1200);
 }
+
+// ---------- summoning: build every 3D ghost before the séance ----------
+let summonedAll = false;
+$('#start').disabled = true;
+$('#start').textContent = 'SUMMONING SPIRITS…';
+let lastRefresh = 0;
+summonAll(p => {
+  $('#summon-bar i').style.width = Math.round(p * 100) + '%';
+  $('#summon-txt').textContent = `${Math.round(p * GHOSTS.length)} / ${GHOSTS.length} spirits summoned`;
+  if (performance.now() - lastRefresh > 250) { world.refreshAtlas(); lastRefresh = performance.now(); }
+}).then(() => {
+  summonedAll = true;
+  world.refreshAtlas();
+  codex.renderList();
+  $('#start').disabled = false; $('#start').textContent = 'PRESS START';
+  $('#summon-txt').textContent = `${GHOSTS.length} spirits summoned`;
+});
 
 $('#start').addEventListener('click', () => {
   $('#title').classList.add('gone');

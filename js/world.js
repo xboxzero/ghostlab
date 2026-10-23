@@ -2,7 +2,7 @@
 // Four dimensions: the three of space, plus TIME — each ring outward from the bonfire is an older age.
 import * as THREE from 'three';
 import { GHOSTS, REALMS } from './data.js';
-import { portraitCanvas, SPRITE_SIZE } from './portrait.js';
+import { atlasCanvas, COLS as ACOLS } from './portrait.js';
 import { rng } from './rng.js';
 
 export const ERAS = [
@@ -82,7 +82,7 @@ export class World {
 
   resize() {
     const w = innerWidth, h = innerHeight;
-    const scale = w > 1600 ? 4 : w > 900 ? 3 : 2;
+    const scale = w > 1900 ? 3 : 2;
     this.lw = Math.max(160, Math.floor(w / scale)); this.lh = Math.max(100, Math.floor(h / scale));
     this.renderer.setSize(this.lw, this.lh, false);
     this.rt.setSize(this.lw, this.lh);
@@ -235,12 +235,11 @@ export class World {
       (byRealmEra[key] = byRealmEra[key] || []).push(g);
     }
     const sectorW = (Math.PI * 2) / REALM_KEYS.length;
-    const cols = 20, rows = Math.ceil(GHOSTS.length / cols);
-    const acv = document.createElement('canvas'); acv.width = cols * SPRITE_SIZE; acv.height = rows * SPRITE_SIZE;
-    const actx = acv.getContext('2d');
-    for (const g of GHOSTS) actx.drawImage(portraitCanvas(g, true), (g.id % cols) * SPRITE_SIZE, Math.floor(g.id / cols) * SPRITE_SIZE);
-    const atlas = new THREE.CanvasTexture(acv);
-    atlas.magFilter = THREE.NearestFilter; atlas.minFilter = THREE.NearestFilter; atlas.colorSpace = THREE.SRGBColorSpace; atlas.generateMipmaps = false;
+    const cols = ACOLS, rows = Math.ceil(GHOSTS.length / cols);
+    // The atlas canvas is filled in as each 3D ghost is summoned (see portrait.js)
+    const atlas = new THREE.CanvasTexture(atlasCanvas);
+    atlas.colorSpace = THREE.SRGBColorSpace; atlas.generateMipmaps = false; atlas.minFilter = THREE.LinearFilter;
+    this.atlasTexes = [];
     for (const list of Object.values(byRealmEra)) {
       list.forEach((g, i) => {
         const r = rng(g.seed);
@@ -251,11 +250,12 @@ export class World {
         const tex = atlas.clone(); // shares one uploaded image; only the UV window differs
         tex.repeat.set(1 / cols, 1 / rows);
         tex.offset.set((g.id % cols) / cols, 1 - (Math.floor(g.id / cols) + 1) / rows);
+        this.atlasTexes.push(tex);
         const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, fog: true });
         const sp = new THREE.Sprite(mat);
         const base = new THREE.Vector3(Math.cos(a) * rad, 3 + r() * 3, Math.sin(a) * rad);
         sp.position.copy(base);
-        sp.scale.setScalar(2.6);
+        sp.scale.setScalar(3.4);
         sp.userData = { id: g.id, base, phase: r() * 10, era };
         this.scene.add(sp);
         this.sprites[g.id] = sp;
@@ -265,6 +265,8 @@ export class World {
     this.glowTex = glowTexture();
     this.glows = new Map();
   }
+
+  refreshAtlas() { for (const t of this.atlasTexes) t.needsUpdate = true; }
 
   setEra(i) {
     this.era = i;
@@ -402,7 +404,7 @@ export class World {
       const u = spr.userData;
       const pv = this.pulses.get(u.id) || 0;
       spr.position.set(u.base.x + Math.sin(t * 0.5 + u.phase) * 0.6, u.base.y + Math.sin(t * 1.3 + u.phase) * 0.5 + pv * 0.6, u.base.z + Math.cos(t * 0.4 + u.phase) * 0.6);
-      spr.scale.setScalar((u.id === this.selected ? 3.6 : 2.6) * (1 + pv * 0.45));
+      spr.scale.setScalar((u.id === this.selected ? 4.6 : 3.4) * (1 + pv * 0.3));
       if (pv) this.pulses.set(u.id, pv * 0.88 < 0.02 ? 0 : pv * 0.88);
       const gl = this.glows.get(u.id);
       if (gl) { gl.position.copy(spr.position); gl.position.y -= 0.2; gl.material.opacity = 0.35 + pv * 0.8 + Math.sin(t * 2 + u.phase) * 0.1; gl.scale.setScalar(5 + pv * 5); }

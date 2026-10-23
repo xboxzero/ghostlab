@@ -23,7 +23,7 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--body); font-size: 20px; }
 button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
 button { cursor: pointer; }
-img { image-rendering: pixelated; }
+img { image-rendering: auto; }
 a { color: var(--cyan); }
 a:hover { color: var(--yellow); }
 
@@ -121,7 +121,9 @@ nav button.on small { color: #333; }
 .entry.on { display: block; }
 .back { margin-bottom: 8px; }
 .hero { display: flex; gap: 12px; align-items: flex-start; }
-.hero img { width: 160px; height: 160px; border: 2px solid var(--rc); box-shadow: 0 0 18px color-mix(in srgb, var(--rc) 45%, transparent); flex: none; }
+.vbox { width: 180px; height: 180px; flex: none; border: 1px solid var(--rc); box-shadow: 0 0 22px color-mix(in srgb, var(--rc) 40%, transparent);
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--rc) 35%, transparent), #10121f 60%, #05060b); cursor: grab; touch-action: none; }
+.vbox img, .vbox canvas { width: 100%; height: 100%; display: block; }
 .hero h2 { font-family: var(--head); font-weight: 700; color: #fff; margin: 0 0 6px; font-size: 24px; line-height: 1.05; text-shadow: 2px 0 rgba(255, 0, 60, 0.6); }
 .meta { color: var(--dim); font-size: 17px; line-height: 1.1; margin-bottom: 3px; }
 .meta b { color: var(--text); font-weight: normal; }
@@ -349,6 +351,11 @@ nav button.on small { color: #333; }
 .t-sub { font-size: 22px; color: var(--text); margin-bottom: 40px; }
 #start { font-family: var(--pix); font-size: 14px; padding: 14px 26px; background: var(--yellow); border: 0; color: #000; animation: blink 1.4s steps(2) infinite; }
 #start:hover { animation: none; background: #fff; }
+#start:disabled { animation: none; background: #3a3a20; color: #aaa; }
+#summon-bar { width: min(360px, 80vw); height: 6px; margin: 0 auto 6px; background: #10162a; border: 1px solid #2a3a60; }
+#summon-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--yellow)); box-shadow: 0 0 8px var(--cyan); transition: width 0.2s; }
+#summon-txt { color: var(--dim); font-size: 16px; margin-bottom: 18px; }
+.toast.warn { border-left-color: var(--red); color: #ffb0bc; }
 .t-foot { margin-top: 30px; color: var(--dim); font-size: 16px; }
 
 @keyframes blink { 50% { opacity: 0.45; } }
@@ -380,7 +387,7 @@ nav button.on small { color: #333; }
   .masterstrip { width: auto; flex-direction: row; flex-wrap: wrap; }
   .inspector { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 45%; }
   .b-title { font-size: 30px; letter-spacing: 3px; }
-  .hero img { width: 112px; height: 112px; }
+  .vbox { width: 128px; height: 128px; }
   .node { width: 150px; padding: 3px 12px; gap: 4px; }
   .node.master { width: 130px; }
   .np, .fire, .drumicon, .jackicon { width: 28px; height: 28px; }

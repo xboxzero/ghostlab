@@ -33,7 +33,8 @@ export function traitsOf(g) {
   if (has(text, 'skeleton', 'skeletal', 'bones', 'skull', 'bone ')) tag('skeleton', 'skeletal');
   if (has(text, 'fox', 'kitsune', 'nine-tailed', 'gumiho')) tag('fox', 'fox ears & tails');
   else if (has(text, /\bcat\b/, 'bakeneko')) tag('cat', 'cat ears');
-  if (has(text, /\b(horns?|horned|oni|demon|demons|devil|demoness)\b/)) tag('horns', 'horns');
+  if (has(text, /\b(antlers?|antlered|stag)\b/)) tag('antlers', 'antlers');
+  else if (has(text, /\b(horns?|horned|oni|demon|demons|devil|demoness)\b/)) tag('horns', 'horns');
   if (has(text, /\b(wings?|winged|bat|bats|bird|birds)\b/) && T.form !== 'ship' && T.form !== 'orb') tag('wings', 'wings');
   if (has(text, 'snake', 'serpent', 'reptil', 'snake-bodied')) tag('serpent', 'serpent tail');
   if (has(text, 'horse-headed', 'horse head', 'horse face', 'horse-face', 'horse skull', 'ox-head')) tag('horsehead', 'horse/ox mask');
@@ -48,7 +49,7 @@ export function traitsOf(g) {
 
   // --- elements ---
   if (has(text, 'water', 'drown', 'river', ' sea', 'lake', 'well', 'ocean', 'swim', 'pool')) tag('water', 'water-soaked');
-  if (has(text, 'fire', 'flame', 'burn', 'lightning')) tag('fire', 'fire');
+  if (has(text, 'fire', 'fiery', 'flame', 'burn', 'lightning', 'smokeless', 'ember')) tag('fire', 'fire');
   if (has(text, 'blood', 'vampir')) tag('blood', 'blood');
   if (has(text, 'tree', 'forest', 'jungle', 'banana', 'leaves')) tag('tree', 'forest');
   if (has(text, 'snow', 'ice', 'frozen', 'freez', 'winter', 'cold')) tag('ice', 'frost');

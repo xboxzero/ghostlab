@@ -59,7 +59,7 @@ export class Mixer {
       <label class="kn"><span>STUTTER LENGTH</span><select data-stlen><option value="1">1/16</option><option value="2" selected>1/8</option><option value="4">1/4</option><option value="8">1/2</option></select></label>
       <div class="fadewrap"><input class="fader" type="range" min="0" max="1.2" step="0.01" value="0.8" data-master aria-label="Master"><div class="vu"><i></i></div></div>
       <div class="endpoint"><span>ENDPOINT</span><select data-out><option value="default">System default output</option></select>
-      <button data-a="rec" class="rec">● REC</button></div>
+      <button data-a="rec" class="rec">● REC</button><button data-a="panic" class="danger" title="Reset every effect and feedback loop (P)">⚠ PANIC</button></div>
     </div>`;
   }
 
@@ -71,7 +71,7 @@ export class Mixer {
     });
     M.querySelector('[data-dj]').oninput = e => { E.init(); E.setDJ(+e.target.value); };
     M.querySelector('[data-dj]').ondblclick = e => { e.target.value = 0; E.setDJ(0); };
-    M.querySelector('[data-master]').oninput = e => { E.init(); E.masterGain.gain.setTargetAtTime(+e.target.value, E.ctx.currentTime, 0.02); };
+    M.querySelector('[data-master]').oninput = e => { E.init(); E.masterLevel = +e.target.value; E.masterGain.gain.setTargetAtTime(E.masterLevel, E.ctx.currentTime, 0.02); };
     M.querySelector('[data-stlen]').onchange = e => { E.init(); E.setStutterLen(+e.target.value); };
     M.querySelectorAll('[data-perf]').forEach(b => {
       const on = e => { e.preventDefault(); this.perf(b.dataset.perf, true); b.setPointerCapture && e.pointerId != null && b.setPointerCapture(e.pointerId); };
@@ -79,6 +79,7 @@ export class Mixer {
       b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off);
     });
     M.querySelector('[data-a="rec"]').onclick = () => this.hooks.record();
+    M.querySelector('[data-a="panic"]').onclick = () => this.hooks.panic();
     const out = M.querySelector('[data-out]');
     out.onfocus = () => this.fillOutputs();
     out.onchange = async () => {

@@ -379,7 +379,7 @@ const FX_BY_CLASS = {
   SHADE: ['distort', 'crush', 'phaser', 'reverb'],
 };
 
-const FX2 = ['none', 'none', 'none', 'wah', 'comb', 'flanger', 'pingpong', 'tape'];
+const FX2 = ['none', 'none', 'none', 'none', 'none', 'chorus', 'pingpong', 'tape'];
 
 export const GHOSTS = [];
 for (const [realm, block] of Object.entries(RAW)) {

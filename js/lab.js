@@ -276,7 +276,7 @@ export class Lab {
         <p><b>Serial:</b> Ghost A → Ghost B → Bonfire. A's voice is haunted by B's filter & two FX slots.</p>
         <p>Drag from a ghost's <span class="dot out"></span> output to another <span class="dot in"></span> input. Click a cable to cut it. Select a ghost to shape its sound. Open the <b>MIXER</b> for EQ, sends, solo and performance FX.</p>
         <label class="slider">MASTER<input type="range" min="0" max="1.2" step="0.01" value="${this.engine.masterGain.gain.value}" data-master></label></div>`;
-      I.querySelector('[data-master]').oninput = e => this.engine.masterGain.gain.setTargetAtTime(+e.target.value, this.engine.ctx.currentTime, 0.03);
+      I.querySelector('[data-master]').oninput = e => { this.engine.masterLevel = +e.target.value; this.engine.masterGain.gain.setTargetAtTime(this.engine.masterLevel, this.engine.ctx.currentTime, 0.03); };
       return;
     }
     const m = this.engine.modules.get(id), n = this.nodes.get(id);

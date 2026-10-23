@@ -3,6 +3,7 @@ import { GHOSTS, REALMS, CLASSES, eraLabel, bindCost } from './data.js';
 import { portraitURL } from './portrait.js';
 import { ERAS, eraOf } from './world.js';
 import { FX_NAMES } from './audio.js';
+import { Viewer } from './portrait.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const MIN_Y = -2600, MAX_Y = 2030;
@@ -20,6 +21,7 @@ export class Codex {
     this.fRealm.innerHTML = '<option value="">All realms</option>' + Object.entries(REALMS).map(([k, r]) => `<option value="${k}">${r.short}</option>`).join('');
     this.fClass.innerHTML = '<option value="">All classes</option>' + Object.entries(CLASSES).map(([k, c]) => `<option value="${k}">${c.glyph} ${k[0] + k.slice(1).toLowerCase()}</option>`).join('');
     for (const el of [this.q, this.fRealm, this.fClass, this.fAge]) el.addEventListener('input', () => this.renderList());
+    this.viewer = new Viewer();
     this.list.addEventListener('click', e => { const it = e.target.closest('[data-id]'); if (it) this.open(+it.dataset.id); });
     this.renderList();
   }
@@ -56,7 +58,7 @@ export class Codex {
     this.entry.innerHTML = `
       <button class="back" data-act="back">‹ Back to index</button>
       <div class="hero" style="--rc:${R.color}">
-        <img src="${portraitURL(g)}" alt="Portrait of ${esc(g.name)}">
+        <div class="vbox" title="Drag to turn"><img src="${portraitURL(g)}" alt="Portrait of ${esc(g.name)}"></div>
         <div>
           <h2>${esc(g.name)}</h2>
           <div class="meta">${esc(g.origin)} · <span style="color:${R.color}">${R.name}</span></div>
@@ -75,6 +77,7 @@ export class Codex {
       <div class="acts">${bindBtn}<button data-act="preview">♪ Hear its voice</button><button data-act="seek">◎ Seek in the world</button></div>
       ${kin.length ? `<h4>KINDRED SPIRITS</h4><div class="kin">${kin.map(k => `<button data-kin="${k.id}" title="${esc(k.name)}"><img src="${portraitURL(k)}" alt=""><span>${esc(k.name)}</span></button>`).join('')}</div>` : ''}`;
     this.entry.classList.add('on'); this.list.classList.add('off');
+    if (this.hooks.ready()) { const box = this.entry.querySelector('.vbox'); box.innerHTML = ''; this.viewer.attach(box, g); }
     this.entry.scrollTop = 0;
     this.entry.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
       const a = b.dataset.act;
@@ -101,6 +104,7 @@ export class Codex {
       <p class="src">Source: <a href="${esc(w.u)}" target="_blank" rel="noopener">Wikipedia — ${esc(w.t)}</a> · text CC BY-SA 4.0</p></div>`;
   }
 
-  back() { this.entry.classList.remove('on'); this.list.classList.remove('off'); this.current = null; this.renderList(); }
+  close() { this.viewer.detach(); }
+  back() { this.viewer.detach(); this.entry.classList.remove('on'); this.list.classList.remove('off'); this.current = null; this.renderList(); }
   refresh() { if (this.current != null) this.open(this.current); else this.renderList(); }
 }

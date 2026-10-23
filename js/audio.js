@@ -42,12 +42,13 @@ export class Engine {
 
   init() {
     if (this.ctx) return;
-    const ctx = this.ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-    this.ir = makeIR(ctx, 3.2);
-    this.irLong = makeIR(ctx, 7);
+    const ctx = this.ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'balanced' });
+    this.ir = makeIR(ctx, 2.4);
+    this.irLong = makeIR(ctx, 4.5);
     this.noise = makeNoise(ctx);
 
     this.masterIn = ctx.createGain();
+    this.dcBlock = ctx.createBiquadFilter(); this.dcBlock.type = 'highpass'; this.dcBlock.frequency.value = 22; this.dcBlock.Q.value = 0.5;
     // master EQ
     this.mEq = eq3(ctx);
     // DJ filter: one knob, left = low-pass, right = high-pass
@@ -69,21 +70,27 @@ export class Engine {
     this.crIn.connect(this.crDry).connect(this.crOut); this.crIn.connect(crWs).connect(this.crWet).connect(this.crOut);
     // wash: throw everything into a long reverb
     this.washSend = ctx.createGain(); this.washSend.gain.value = 0;
-    const washVerb = ctx.createConvolver(); washVerb.buffer = this.irLong;
+    const washVerb = this.washVerb = ctx.createConvolver(); washVerb.buffer = this.irLong;
     const washRet = ctx.createGain(); washRet.gain.value = 0.9;
     // dynamics
     this.comp = ctx.createDynamicsCompressor();
     this.comp.threshold.value = -14; this.comp.ratio.value = 4; this.comp.attack.value = 0.005; this.comp.release.value = 0.15;
     this.limiter = ctx.createDynamicsCompressor();
-    this.limiter.threshold.value = -1.5; this.limiter.ratio.value = 20; this.limiter.attack.value = 0.001; this.limiter.release.value = 0.08;
-    this.masterGain = ctx.createGain(); this.masterGain.gain.value = 0.8;
+    this.limiter.threshold.value = -3; this.limiter.knee.value = 0; this.limiter.ratio.value = 20; this.limiter.attack.value = 0.001; this.limiter.release.value = 0.08;
+    this.masterGain = ctx.createGain();
+    this.masterGain.gain.setValueAtTime(0, ctx.currentTime); this.masterGain.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 1.5); // gentle fade-in
+    // Safety: a soft clipper after everything — nothing can leave the Lab louder than full scale
+    this.guard = ctx.createAnalyser(); this.guard.fftSize = 512; this.guardData = new Float32Array(512); this.hot = 0;
+    this.clipPre = ctx.createGain(); this.clipPre.gain.value = 0.5;
+    this.clipper = ctx.createWaveShaper(); this.clipper.curve = softClipCurve(); this.clipper.oversample = '2x';
     this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 1024;
 
-    this.masterIn.connect(this.mEq.input); this.mEq.output.connect(this.djLP).connect(this.djHP).connect(this.stIn);
+    this.masterIn.connect(this.dcBlock).connect(this.mEq.input); this.mEq.output.connect(this.djLP).connect(this.djHP).connect(this.stIn);
     this.stOut.connect(this.gate).connect(this.crIn);
     this.crOut.connect(this.comp);
-    this.crOut.connect(this.washSend).connect(washVerb).connect(washRet).connect(this.comp);
-    this.comp.connect(this.limiter).connect(this.masterGain).connect(this.analyser);
+    this.crOut.connect(this.washSend); washVerb.connect(washRet).connect(this.comp); // washSend→washVerb only while Wash is held
+    this.comp.connect(this.limiter).connect(this.masterGain).connect(this.clipPre).connect(this.clipper).connect(this.analyser);
+    this.masterGain.connect(this.guard);
 
     // Endpoint: stereo, or sync-out (pulse L / mono music R)
     this.stereoOut = ctx.createGain();
@@ -105,8 +112,8 @@ export class Engine {
     const pd = ctx.createDelay(0.2); pd.delayTime.value = 0.025;
     this.busA.input.connect(pd).connect(cv).connect(this.busA.ret);
     this.busB = makeBus(ctx, 'B'); // tempo echo
-    this.busBDelay = ctx.createDelay(2); this.busBFb = ctx.createGain(); this.busBFb.gain.value = 0.5;
-    const bLp = ctx.createBiquadFilter(); bLp.frequency.value = 3000;
+    this.busBDelay = ctx.createDelay(2); this.busBFb = ctx.createGain(); this.busBFb.gain.value = 0.45;
+    const bLp = ctx.createBiquadFilter(); bLp.frequency.value = 3000; bLp.Q.value = 0.5;
     this.busB.input.connect(this.busBDelay); this.busBDelay.connect(bLp).connect(this.busBFb).connect(this.busBDelay); bLp.connect(this.busB.ret);
     for (const b of [this.busA, this.busB]) b.out.connect(this.masterIn);
 
@@ -233,6 +240,9 @@ export class Engine {
     if (name === 'gate' && !on) { this.gate.gain.cancelScheduledValues(t); this.gate.gain.setTargetAtTime(1, t, 0.005); }
     if (name === 'crush') { this.crWet.gain.setTargetAtTime(on ? 0.9 : 0, t, 0.01); this.crDry.gain.setTargetAtTime(on ? 0.25 : 1, t, 0.01); }
     if (name === 'wash') {
+      clearTimeout(this.washOff);
+      if (on && !this.washOn) { this.washSend.connect(this.washVerb); this.washOn = true; }
+      if (!on) this.washOff = setTimeout(() => { try { this.washSend.disconnect(this.washVerb); } catch (e) { } this.washOn = false; }, 6000);
       this.washSend.gain.setTargetAtTime(on ? 1.2 : 0, t, on ? 0.02 : 0.4);
       this.djHP.frequency.setTargetAtTime(on ? 700 : (this.djValue > 0 ? 10 * Math.pow(2, this.djValue * 10) : 10), t, on ? 0.4 : 0.1);
     }
@@ -274,7 +284,18 @@ export class Engine {
   alignTo(time) { if (this.playing) this.nextTime = time; }
 
   tick() {
-    const ahead = this.ctx.currentTime + 0.12;
+    const now = this.ctx.currentTime;
+    // If the tab was in the background (timers throttled), skip missed steps instead of
+    // firing them all at once.
+    if (this.nextTime < now - 0.05) {
+      const missed = Math.ceil((now - this.nextTime) / this.stepDur);
+      this.nextTime += missed * this.stepDur;
+      this.step = (this.step + missed) % 16;
+      this.bar += Math.floor(missed / 16);
+    }
+    if (this.events.length > 600) this.events.splice(0, this.events.length - 600);
+    this.watchdog();
+    const ahead = now + 0.12;
     while (this.nextTime < ahead) {
       const s = this.step;
       const t = this.nextTime + (s % 2 ? this.swing * this.stepDur : 0);
@@ -297,6 +318,24 @@ export class Engine {
       if (this.step === 0) this.bar++;
     }
   }
+  // Feedback guard: if the mix stays far above full scale for a second, flush every effect.
+  watchdog() {
+    this.guard.getFloatTimeDomainData(this.guardData);
+    let peak = 0;
+    for (let i = 0; i < this.guardData.length; i += 4) peak = Math.max(peak, Math.abs(this.guardData[i]));
+    this.hot = peak > 1.8 ? this.hot + 1 : Math.max(0, this.hot - 2);
+    if (this.hot > 40) { this.hot = 0; this.panic(); this.onPanic && this.onPanic(); }
+  }
+  // Kill every effect tail and feedback loop, keep the music playing.
+  panic() {
+    const t = this.ctx.currentTime;
+    for (const m of this.modules.values()) { m.setFx(1, m.p.fx); m.setFx(2, m.p.fx2); m.apply(); }
+    this.busBFb.gain.setValueAtTime(0, t); this.busBFb.gain.setValueAtTime(0.45, t + 0.6);
+    for (const k of ['stutter', 'gate', 'wash', 'crush']) if (this.perf[k]) this.setPerf(k, false);
+    this.masterGain.gain.cancelScheduledValues(t);
+    this.masterGain.gain.setValueAtTime(0.3, t); this.masterGain.gain.linearRampToValueAtTime(this.masterLevel ?? 0.8, t + 1.5);
+  }
+
   drainEvents() {
     if (!this.ctx) return [];
     const now = this.ctx.currentTime, out = [];
@@ -734,7 +773,7 @@ function makeFx(E, name, mod) {
   switch (name) {
     case 'delay': {
       const d = ctx.createDelay(2), fb = ctx.createGain(), lp = ctx.createBiquadFilter();
-      d.delayTime.value = E.stepDur * 3; fb.gain.value = 0.48; lp.frequency.value = 2800;
+      d.delayTime.value = E.stepDur * 3; fb.gain.value = 0.42; lp.frequency.value = 2800; lp.Q.value = 0.5;
       input.connect(d); d.connect(lp).connect(fb).connect(d); lp.connect(output);
       tempo = () => d.delayTime.setTargetAtTime(E.stepDur * 3, ctx.currentTime, 0.05);
       break;
@@ -743,7 +782,7 @@ function makeFx(E, name, mod) {
       const dl = ctx.createDelay(2), dr = ctx.createDelay(2), fbl = ctx.createGain(), fbr = ctx.createGain();
       const merge = ctx.createChannelMerger(2), mono = ctx.createGain();
       mono.channelCount = 1; mono.channelCountMode = 'explicit';
-      dl.delayTime.value = dr.delayTime.value = E.stepDur * 2; fbl.gain.value = fbr.gain.value = 0.55;
+      dl.delayTime.value = dr.delayTime.value = E.stepDur * 2; fbl.gain.value = fbr.gain.value = 0.45;
       input.connect(mono).connect(dl); dl.connect(fbl).connect(dr); dr.connect(fbr).connect(dl);
       dl.connect(merge, 0, 0); dr.connect(merge, 0, 1); merge.connect(output);
       tempo = () => { dl.delayTime.setTargetAtTime(E.stepDur * 2, ctx.currentTime, 0.05); dr.delayTime.setTargetAtTime(E.stepDur * 2, ctx.currentTime, 0.05); };
@@ -751,7 +790,7 @@ function makeFx(E, name, mod) {
     }
     case 'tape': { // wobbly, saturated tape echo
       const d = ctx.createDelay(2), fb = ctx.createGain(), lp = ctx.createBiquadFilter(), ws = ctx.createWaveShaper();
-      d.delayTime.value = E.stepDur * 4; fb.gain.value = 0.62; lp.frequency.value = 1800; ws.curve = driveCurve(6);
+      d.delayTime.value = E.stepDur * 4; fb.gain.value = 0.5; lp.frequency.value = 1800; lp.Q.value = 0.5; ws.curve = driveCurve(6);
       lfo(0.6, 0.004, d.delayTime);
       input.connect(d); d.connect(lp).connect(ws).connect(fb).connect(d); ws.connect(output);
       tempo = () => d.delayTime.setTargetAtTime(E.stepDur * 4, ctx.currentTime, 0.05);
@@ -779,9 +818,10 @@ function makeFx(E, name, mod) {
     }
     case 'flanger': {
       const d = ctx.createDelay(0.05), fb = ctx.createGain();
-      d.delayTime.value = 0.004; fb.gain.value = 0.7;
+      d.delayTime.value = 0.004; fb.gain.value = 0.55;
       lfo(0.2, 0.003, d.delayTime);
-      input.connect(d); d.connect(fb).connect(d); d.connect(output); input.connect(output);
+      const o2 = ctx.createGain(); o2.gain.value = 0.6;
+      input.connect(d); d.connect(fb).connect(d); d.connect(o2); input.connect(o2); o2.connect(output);
       break;
     }
     case 'phaser': {
@@ -797,17 +837,18 @@ function makeFx(E, name, mod) {
     case 'wah': {
       const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 7;
       const o = lfo(E.bpm / 60 / 2, 900, bp.frequency);
-      const g = ctx.createGain(); g.gain.value = 2.2;
+      const g = ctx.createGain(); g.gain.value = 1.2;
       input.connect(bp).connect(g).connect(output);
       tempo = () => o.frequency.setTargetAtTime(E.bpm / 60 / 2, ctx.currentTime, 0.05);
       break;
     }
     case 'comb': { // resonator tuned to the current key
       const d = ctx.createDelay(0.1), fb = ctx.createGain(), lp = ctx.createBiquadFilter();
-      fb.gain.value = 0.88; lp.frequency.value = 5000;
+      fb.gain.value = 0.72; lp.frequency.value = 4000; lp.Q.value = 0.5; // loop gain stays well below 1
+      const trim = ctx.createGain(); trim.gain.value = 0.4;
       const tune = () => d.delayTime.setTargetAtTime(1 / E.noteFreq(0, 2), ctx.currentTime, 0.02);
       tune();
-      input.connect(d); d.connect(lp).connect(fb).connect(d); lp.connect(output);
+      input.connect(d); d.connect(lp).connect(fb).connect(d); lp.connect(trim).connect(output);
       tempo = tune;
       break;
     }
@@ -841,6 +882,14 @@ function makeFx(E, name, mod) {
 function driveCurve(k) {
   const n = 2048, c = new Float32Array(n);
   for (let i = 0; i < n; i++) { const x = i * 2 / n - 1; c[i] = (3 + k) * x * 20 * Math.PI / 180 / (Math.PI + k * Math.abs(x)); }
+  return c;
+}
+// Unity gain below 0.7, then a smooth knee that never exceeds 0.98. The shaper is fed at
+// half level (clipPre) so inputs up to 2x full scale still land on the curve.
+function softClipCurve() {
+  const n = 8192, c = new Float32Array(n);
+  const f = y => { const a = Math.abs(y); return Math.sign(y) * (a < 0.7 ? a : 0.7 + 0.28 * Math.tanh((a - 0.7) / 0.28)); };
+  for (let i = 0; i < n; i++) { const x = i * 2 / (n - 1) - 1; c[i] = f(2 * x); }
   return c;
 }
 function crushCurve(bits) {
