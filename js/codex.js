@@ -28,7 +28,7 @@ export class Codex {
     const q = this.q.value.trim().toLowerCase(), realm = this.fRealm.value, cls = this.fClass.value, age = this.fAge.checked;
     const era = this.hooks.era();
     const items = GHOSTS.filter(g =>
-      (!q || (g.name + ' ' + g.origin + ' ' + g.lore).toLowerCase().includes(q)) &&
+      (!q || (g.name + ' ' + g.origin + ' ' + g.lore + ' ' + (g.wiki ? g.wiki.t + ' ' + g.wiki.x : '')).toLowerCase().includes(q)) &&
       (!realm || g.realm === realm) && (!cls || g.cls === cls) && (!age || eraOf(g.year) === era));
     items.sort((a, b) => a.name.localeCompare(b.name));
     const seen = this.hooks.seen();
@@ -60,11 +60,12 @@ export class Codex {
         <div>
           <h2>${esc(g.name)}</h2>
           <div class="meta">${esc(g.origin)} · <span style="color:${R.color}">${R.name}</span></div>
-          <div class="meta">First told: <b>${eraLabel(g.year)}</b> · ${ERAS[era].name}</div>
+          <div class="meta">First told: <b>c. ${eraLabel(g.year)}</b> · ${ERAS[era].name}</div>
           <div class="meta">Class: <b>${C.glyph} ${g.cls}</b></div>
         </div>
       </div>
-      <p class="lore">${esc(g.lore)}</p>
+      ${this.wikiHTML(g)}
+      ${g.traits.tags.length ? `<div class="traits"><h4>SPRITE DESIGN · READ FROM WIKIPEDIA</h4>${g.traits.tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
       <div class="stats">${pips(g.dread, 'DREAD')}${pips(g.wail, 'WAIL')}${pips(g.speed, 'SPEED')}</div>
       <div class="sigil"><h4>SOUND SIGIL</h4>
         <div>Voice: <b>${C.voice}</b> — ${C.desc}</div>
@@ -85,6 +86,19 @@ export class Codex {
     });
     this.entry.querySelectorAll('[data-kin]').forEach(b => b.onclick = () => this.open(+b.dataset.kin));
     this.show();
+  }
+
+  wikiHTML(g) {
+    const w = g.wiki;
+    if (!w) return `<p class="lore">${esc(g.lore)}</p>`;
+    const img = w.img ? `<a class="wimg" href="${esc(w.u)}" target="_blank" rel="noopener"><img src="${esc(w.img)}" alt="Image from the Wikipedia article ${esc(w.t)}" loading="lazy" referrerpolicy="no-referrer"></a>` : '';
+    if (w.s) {
+      return `<div class="wiki">${img}<p class="lore">${esc(w.x)}</p>
+        <p class="src">Source: <a href="${esc(w.u)}" target="_blank" rel="noopener">Wikipedia — ${esc(w.t)}</a> · text CC BY-SA 4.0</p></div>`;
+    }
+    return `<p class="lore">${esc(g.lore)}</p>
+      <div class="wiki ctx">${img}<h4>WIKIPEDIA CONTEXT · ${esc(w.t)}</h4><p>${esc(w.x)}</p>
+      <p class="src">Source: <a href="${esc(w.u)}" target="_blank" rel="noopener">Wikipedia — ${esc(w.t)}</a> · text CC BY-SA 4.0</p></div>`;
   }
 
   back() { this.entry.classList.remove('on'); this.list.classList.remove('off'); this.current = null; this.renderList(); }

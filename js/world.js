@@ -2,7 +2,7 @@
 // Four dimensions: the three of space, plus TIME — each ring outward from the bonfire is an older age.
 import * as THREE from 'three';
 import { GHOSTS, REALMS } from './data.js';
-import { portraitCanvas } from './portrait.js';
+import { portraitCanvas, SPRITE_SIZE } from './portrait.js';
 import { rng } from './rng.js';
 
 export const ERAS = [
@@ -65,8 +65,9 @@ export class World {
         float b2(vec2 a){ a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
         float bayer(vec2 a){ return b2(0.5 * a) * 0.25 + b2(a); }
         void main(){
-          vec3 c = pow(texture2D(tDiffuse, vUv).rgb, vec3(1.0 / 2.2));
-          c += flash * vec3(0.12, 0.05, 0.0);
+          vec2 ca = vec2(0.0008 + flash * 0.003, 0.0);
+          vec3 c = pow(vec3(texture2D(tDiffuse, vUv + ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - ca).b), vec3(1.0 / 2.2));
+          c += flash * vec3(0.10, 0.09, 0.0);
           float d = bayer(gl_FragCoord.xy) - 0.5;
           float L = 14.0;
           c = floor(c * L + d * 0.85 + 0.5) / L;
@@ -90,7 +91,7 @@ export class World {
 
   buildWorld() {
     const S = this.scene, r = rng(1337);
-    this.fogColor = new THREE.Color(0x0c0912);
+    this.fogColor = new THREE.Color(0x0a0718);
     S.background = this.fogColor.clone();
     S.fog = new THREE.FogExp2(this.fogColor.clone(), 0.0078);
 
@@ -148,6 +149,13 @@ export class World {
     this.soulPts = new THREE.Points(this.soulGeo, new THREE.PointsMaterial({ size: 1.2, color: 0xffe9a0, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
     S.add(this.soulPts);
 
+    // Data rain (Cyberpunk drizzle)
+    const RN = 260;
+    this.rain = new Float32Array(RN * 3);
+    for (let i = 0; i < RN; i++) { this.rain[i * 3] = (r() - 0.5) * 220; this.rain[i * 3 + 1] = r() * 60; this.rain[i * 3 + 2] = (r() - 0.5) * 220; }
+    this.rainGeo = new THREE.BufferGeometry(); this.rainGeo.setAttribute('position', new THREE.BufferAttribute(this.rain, 3));
+    S.add(new THREE.Points(this.rainGeo, new THREE.PointsMaterial({ color: 0x00f0ff, size: 0.5, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })));
+
     // Shrines of the eight realms
     this.shrines = [];
     for (const k of REALM_KEYS) {
@@ -166,6 +174,11 @@ export class World {
       const banner = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 7), psx(new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide, emissive: col, emissiveIntensity: 0.25 })));
       banner.position.set(0, 7, -2.6); g.add(banner);
       const lamp = new THREE.PointLight(col, 40, 34, 1.8); lamp.position.set(0, 5, 0); g.add(lamp);
+      const tube = new THREE.MeshBasicMaterial({ color: col });
+      for (const [px, pz] of [[-4, -2], [4, -2], [-4, 3], [4, 3]]) {
+        const t = new THREE.Mesh(new THREE.BoxGeometry(0.18, 10.5, 0.18), tube); t.position.set(px + (px < 0 ? 0.62 : -0.62), 6.5, pz + 0.62); g.add(t);
+      }
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(4.7, 0.12, 4, 16, Math.PI), new THREE.MeshBasicMaterial({ color: 0xfcee0a })); ring.position.set(0, 12, 3.7); g.add(ring);
       const gem = new THREE.Mesh(new THREE.OctahedronGeometry(1.1, 0), new THREE.MeshBasicMaterial({ color: col }));
       gem.position.set(0, 4.5, 0.5); g.add(gem);
       const label = textSprite(REALMS[k].name, REALMS[k].color);
@@ -207,7 +220,7 @@ export class World {
 
     // Time rings (the 4th dimension made visible)
     this.eraRings = ERAS.map((e, i) => {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(eraRadius(i) - 0.25, eraRadius(i) + 0.25, 96), new THREE.MeshBasicMaterial({ color: 0x806040, transparent: true, opacity: 0.15, side: THREE.DoubleSide }));
+      const ring = new THREE.Mesh(new THREE.RingGeometry(eraRadius(i) - 0.25, eraRadius(i) + 0.25, 96), new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.15, side: THREE.DoubleSide }));
       ring.rotation.x = -Math.PI / 2; ring.position.y = 0.35;
       S.add(ring);
       return ring;
@@ -223,9 +236,9 @@ export class World {
     }
     const sectorW = (Math.PI * 2) / REALM_KEYS.length;
     const cols = 20, rows = Math.ceil(GHOSTS.length / cols);
-    const acv = document.createElement('canvas'); acv.width = cols * 48; acv.height = rows * 48;
+    const acv = document.createElement('canvas'); acv.width = cols * SPRITE_SIZE; acv.height = rows * SPRITE_SIZE;
     const actx = acv.getContext('2d');
-    for (const g of GHOSTS) actx.drawImage(portraitCanvas(g, true), (g.id % cols) * 48, Math.floor(g.id / cols) * 48);
+    for (const g of GHOSTS) actx.drawImage(portraitCanvas(g, true), (g.id % cols) * SPRITE_SIZE, Math.floor(g.id / cols) * SPRITE_SIZE);
     const atlas = new THREE.CanvasTexture(acv);
     atlas.magFilter = THREE.NearestFilter; atlas.minFilter = THREE.NearestFilter; atlas.colorSpace = THREE.SRGBColorSpace; atlas.generateMipmaps = false;
     for (const list of Object.values(byRealmEra)) {
@@ -255,7 +268,7 @@ export class World {
 
   setEra(i) {
     this.era = i;
-    this.eraRings.forEach((ring, k) => { ring.material.opacity = k === i ? 0.75 : 0.12; ring.material.color.set(k === i ? 0xffb050 : 0x806040); });
+    this.eraRings.forEach((ring, k) => { ring.material.opacity = k === i ? 0.85 : 0.14; ring.material.color.set(k === i ? 0xfcee0a : 0x00f0ff); });
     const t = ERAS[i].tint;
     this.fogTarget = new THREE.Color(t[0] * 0.12, t[1] * 0.12, t[2] * 0.14);
     this.refreshGhosts();
@@ -376,6 +389,10 @@ export class World {
     }
     this.soulGeo.attributes.position.needsUpdate = true;
 
+    // data rain
+    for (let i = 0; i < this.rain.length; i += 3) { this.rain[i + 1] -= dt * 22; if (this.rain[i + 1] < 0) this.rain[i + 1] = 60; }
+    this.rainGeo.attributes.position.needsUpdate = true;
+
     // shrines
     for (const s of this.shrines) { s.gem.rotation.y = t * 0.8; s.gem.position.y = 4.5 + Math.sin(t * 1.5 + s.g.position.x) * 0.4; }
 
@@ -401,7 +418,7 @@ export class World {
 function textSprite(text, color) {
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 64;
   const c = cv.getContext('2d');
-  c.font = '600 30px Cinzel, Georgia, serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = '700 30px "Chakra Petch", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillText(text, 258, 35);
   c.fillStyle = color; c.fillText(text, 256, 32);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;

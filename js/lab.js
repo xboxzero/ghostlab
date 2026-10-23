@@ -2,7 +2,8 @@
 // to run a cable. Chains of cables = SERIAL. Many cables into one input = PARALLEL.
 import { GHOSTS, REALMS, CLASSES } from './data.js';
 import { portraitURL } from './portrait.js';
-import { FX_NAMES, genPattern } from './audio.js';
+import { FX_NAMES, genPattern, upgradeDrums } from './audio.js';
+import { DRUM_ROWS, drumPattern } from './genres.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,7 +36,11 @@ export class Lab {
   addGhost(g, pos, state) {
     const id = 'g' + g.id;
     if (this.nodes.has(id)) return id;
-    const m = this.engine.addModule(id, g.cls, { ghost: g, fx: g.fx, params: state && state.p, pattern: state && state.pattern });
+    const genre = this.hooks.genre();
+    const m = this.engine.addModule(id, g.cls, {
+      ghost: g, fx: g.fx, params: Object.assign({ fx2: g.fx2 }, state && state.p),
+      pattern: (state && state.pattern) || genPattern(g.cls, g, 0, genre),
+    });
     if (state && state.muted) m.setMuted(true);
     const c = CLASSES[g.cls];
     const el = document.createElement('div');
@@ -56,18 +61,38 @@ export class Lab {
 
   addDrum(pos, state) {
     const id = 'drum';
-    const m = this.engine.addModule(id, 'DRUM', { fx: 'distort', params: Object.assign({ mix: 0.15, cutoff: 0.95 }, state && state.p), pattern: state && state.pattern });
+    const pattern = (state && upgradeDrums(state.pattern)) || drumPattern(this.hooks.genre());
+    const m = this.engine.addModule(id, 'DRUM', { fx: 'distort', params: Object.assign({ mix: 0.12, cutoff: 0.95, sendA: 0.05 }, state && state.p), pattern });
     if (state && state.muted) m.setMuted(true);
     const el = document.createElement('div');
     el.className = 'node drum';
     el.innerHTML = `<div class="port in" title="Input"></div><div class="drumicon"></div>
-      <div class="nb"><div class="nn">RITUAL DRUM</div><div class="nc">◉ Kick · Clap · Hat</div><div class="meter"><i></i></div></div>
+      <div class="nb"><div class="nn">RITUAL DRUM</div><div class="nc">◉ 8-voice kit</div><div class="meter"><i></i></div></div>
       <button class="mute" title="Mute">M</button><div class="port out" title="Output"></div>`;
     this.board.appendChild(el);
     const p = pos || this.freeSpot();
     this.nodes.set(id, { el, x: p.x, y: p.y, drum: true });
     this.wireNode(id, el);
     this.place(id);
+  }
+
+  addAnalog(source, pos) {
+    const id = 'analog';
+    if (this.nodes.has(id)) return id;
+    const m = this.engine.addModule(id, 'ANALOG', { fx: 'none', params: { fx: 'none', mix: 0.3, cutoff: 1, sendA: 0.1, vol: 0.9 } });
+    m.source = source; source.connect(m.voiceBus);
+    const el = document.createElement('div');
+    el.className = 'node analog';
+    el.innerHTML = `<div class="port in" title="Input"></div><div class="jackicon"></div>
+      <div class="nb"><div class="nn">ANALOG IN</div><div class="nc">⏚ 3.5 mm line-in</div><div class="meter"><i></i></div></div>
+      <button class="mute" title="Mute">M</button><div class="port out" title="Output: patch into a ghost to haunt your synth"></div>`;
+    this.board.appendChild(el);
+    const p = pos || this.freeSpot();
+    this.nodes.set(id, { el, x: p.x, y: p.y, analog: true });
+    this.wireNode(id, el);
+    this.place(id);
+    this.patch(id, 'master');
+    return id;
   }
 
   remove(id) {
@@ -216,7 +241,7 @@ export class Lab {
   }
 
   renderRouting() {
-    const E = this.engine, name = id => id === 'master' ? 'Bonfire' : id === 'drum' ? 'Drum' : GHOSTS[+id.slice(1)].name;
+    const E = this.engine, name = id => id === 'master' ? 'Bonfire' : id === 'drum' ? 'Drum' : id === 'analog' ? 'Analog In' : GHOSTS[+id.slice(1)].name;
     const hasInput = new Set();
     for (const m of E.modules.values()) for (const d of m.dests) hasInput.add(d);
     const chains = [];
@@ -248,9 +273,9 @@ export class Lab {
       I.innerHTML = `<div class="ins-empty"><h3>THE BONFIRE</h3>
         <p>Every sound must reach the fire to be heard.</p>
         <p><b>Parallel:</b> many ghosts → Bonfire. Each is heard on its own.</p>
-        <p><b>Serial:</b> Ghost A → Ghost B → Bonfire. A's voice is haunted by B's filter & FX.</p>
-        <p>Drag from a ghost's <span class="dot out"></span> output to another <span class="dot in"></span> input. Click a cable to cut it. Select a ghost to shape its sound.</p>
-        <label class="slider">MASTER<input type="range" min="0" max="1" step="0.01" value="${this.engine.masterGain.gain.value}" data-master></label></div>`;
+        <p><b>Serial:</b> Ghost A → Ghost B → Bonfire. A's voice is haunted by B's filter & two FX slots.</p>
+        <p>Drag from a ghost's <span class="dot out"></span> output to another <span class="dot in"></span> input. Click a cable to cut it. Select a ghost to shape its sound. Open the <b>MIXER</b> for EQ, sends, solo and performance FX.</p>
+        <label class="slider">MASTER<input type="range" min="0" max="1.2" step="0.01" value="${this.engine.masterGain.gain.value}" data-master></label></div>`;
       I.querySelector('[data-master]').oninput = e => this.engine.masterGain.gain.setTargetAtTime(+e.target.value, this.engine.ctx.currentTime, 0.03);
       return;
     }
@@ -258,45 +283,77 @@ export class Lab {
     if (!m) return;
     const g = n.ghost;
     const title = g ? `<img src="${portraitURL(g)}" class="ins-pic"><div><h3>${esc(g.name)}</h3><div class="sub">${CLASSES[g.cls].glyph} ${CLASSES[g.cls].voice} · ${esc(g.origin)}</div></div>`
-      : `<div class="drumicon big"></div><div><h3>RITUAL DRUM</h3><div class="sub">Four-on-the-floor heart of the séance</div></div>`;
+      : n.analog ? `<div class="jackicon big"></div><div><h3>ANALOG IN</h3><div class="sub">Your hardware synth, live from the 3.5 mm input</div></div>`
+        : `<div class="drumicon big"></div><div><h3>RITUAL DRUM</h3><div class="sub">8-voice kit · follows the Sound History genre</div></div>`;
     const sl = (k, label) => `<label class="slider">${label}<input type="range" min="0" max="1" step="0.01" value="${m.p[k]}" data-k="${k}"></label>`;
+    const fxSel = (k) => `<select data-fxk="${k}">${Object.entries(FX_NAMES).map(([f, v]) => `<option value="${f}" ${f === m.p[k] ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
     const others = [...this.nodes.keys()].filter(k => k !== id && this.engine.canConnect(id, k) && !m.dests.has(k));
-    const nm = k => k === 'master' ? 'The Bonfire' : k === 'drum' ? 'Ritual Drum' : GHOSTS[+k.slice(1)].name;
+    const nm = k => k === 'master' ? 'The Bonfire' : k === 'drum' ? 'Ritual Drum' : k === 'analog' ? 'Analog In' : GHOSTS[+k.slice(1)].name;
     I.innerHTML = `<div class="ins-head">${title}</div>
-      <div class="grid2">${sl('vol', 'VOLUME')}${sl('cutoff', 'CUTOFF')}${sl('res', 'RESONANCE')}${sl('mix', 'FX MIX')}${sl('haunt', g ? 'HAUNT' : 'BOOM')}
-      <label class="slider">EFFECT<select data-fx>${Object.entries(FX_NAMES).map(([k, v]) => `<option value="${k}" ${k === m.p.fx ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
-      <div class="steps-title">SEQUENCE <small>${g ? 'click: on/off · right-click / shift-click: pitch up · alt-click: down' : 'click to toggle'}</small></div>
-      <div class="steps">${this.stepsHTML(m)}</div>
+      <div class="xyrow">
+        <div class="xy" title="Drag: X = cutoff, Y = FX 1 mix. Double-click to recentre."><i style="left:${m.p.cutoff * 100}%;top:${(1 - m.p.mix) * 100}%"></i><span>CUTOFF →</span><em>FX ↑</em></div>
+        <div class="grid1">${sl('vol', 'VOLUME')}${sl('res', 'RESONANCE')}${n.analog ? '' : sl('haunt', g ? 'HAUNT' : 'BOOM')}</div>
+      </div>
+      <div class="grid2">
+        <label class="slider">FX SLOT 1${fxSel('fx')}</label>${sl('mix', 'MIX 1')}
+        <label class="slider">FX SLOT 2${fxSel('fx2')}</label>${sl('mix2', 'MIX 2')}
+      </div>
+      ${n.analog ? '' : `<div class="steps-title">SEQUENCE <small>${g ? 'click: on/off · right/shift-click: pitch up · alt-click: down' : 'click: off → hit → soft'}</small></div>
+      <div class="steps">${this.stepsHTML(m)}</div>`}
       <div class="sends"><span>SENDS TO:</span> ${[...m.dests].map(d => `<button class="chip" data-cut="${d}" title="Cut">${esc(nm(d))} ✕</button>`).join('') || '<i>nothing — silent!</i>'}
         ${others.length ? `<select data-send><option value="">+ connect to…</option>${others.map(k => `<option value="${k}">${esc(nm(k))}${k === 'master' ? ' (parallel)' : ' (serial)'}</option>`).join('')}</select>` : ''}</div>
       <div class="ins-actions">
-        ${g ? '<button data-act="reroll">⚄ Reroll</button><button data-act="codex">📖 Codex</button>' : '<button data-act="drumfill">⚄ Reroll</button>'}
+        ${g ? '<button data-act="reroll">⚄ Reroll</button><button data-act="codex">📖 Codex</button>' : n.analog ? '' : '<button data-act="drumfill">⚄ Genre beat</button><button data-act="drumrand">⚄ Mutate</button>'}
         <button data-act="mute">${m.muted ? 'Unmute' : 'Mute'}</button>
         ${g ? '<button data-act="release" class="danger">Release</button>' : ''}
       </div>`;
-    I.querySelectorAll('input[data-k]').forEach(inp => inp.oninput = () => { m.setParam(inp.dataset.k, +inp.value); this.hooks.onChange(); });
-    I.querySelector('[data-fx]').onchange = e => { m.setParam('fx', e.target.value); this.hooks.onChange(); };
+    const changed = () => { this.hooks.onChange(); this.hooks.onParam && this.hooks.onParam(id); };
+    I.querySelectorAll('input[data-k]').forEach(inp => inp.oninput = () => { m.setParam(inp.dataset.k, +inp.value); this.syncXY(m); changed(); });
+    I.querySelectorAll('[data-fxk]').forEach(sel => sel.onchange = () => { m.setParam(sel.dataset.fxk, sel.value); changed(); });
     I.querySelectorAll('[data-cut]').forEach(b => b.onclick = () => { this.unpatch(id, b.dataset.cut); this.renderInspector(); });
     const send = I.querySelector('[data-send]');
     if (send) send.onchange = () => { if (send.value) { this.patch(id, send.value); this.renderInspector(); } };
+    // XY pad: X = cutoff, Y = FX slot 1 mix
+    const xy = I.querySelector('.xy');
+    const drag = e => {
+      const r = xy.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height));
+      m.setParam('cutoff', x); m.setParam('mix', y); this.syncXY(m);
+      I.querySelectorAll('input[data-k]').forEach(inp => { inp.value = m.p[inp.dataset.k]; });
+    };
+    xy.addEventListener('pointerdown', e => {
+      xy.setPointerCapture(e.pointerId); drag(e);
+      const mv = ev => drag(ev), up = () => { xy.removeEventListener('pointermove', mv); xy.removeEventListener('pointerup', up); changed(); };
+      xy.addEventListener('pointermove', mv); xy.addEventListener('pointerup', up);
+    });
+    xy.ondblclick = () => { m.setParam('cutoff', 0.75); m.setParam('mix', 0.35); this.syncXY(m); changed(); };
     I.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
       const a = b.dataset.act;
-      if (a === 'reroll') { this.salt[id] = (this.salt[id] || 0) + 1; m.pattern = genPattern(g.cls, g, this.salt[id]); }
-      if (a === 'drumfill') {
-        const r = () => Math.random();
-        for (let i = 0; i < 16; i++) { m.pattern.kick[i] = i % 4 === 0 || r() < 0.08; m.pattern.hat[i] = i % 2 === 0 ? r() < 0.3 : r() < 0.85; m.pattern.clap[i] = i === 4 || i === 12 || r() < 0.06; }
+      if (a === 'reroll') { this.salt[id] = (this.salt[id] || 0) + 1; m.pattern = genPattern(g.cls, g, this.salt[id], this.hooks.genre()); }
+      if (a === 'drumfill') m.pattern = drumPattern(this.hooks.genre());
+      if (a === 'drumrand') {
+        for (const row of DRUM_ROWS) for (let i = 0; i < 16; i++) {
+          const v = m.pattern[row][i];
+          if (Math.random() < 0.08) m.pattern[row][i] = v ? 0 : (Math.random() < 0.5 ? 0.5 : 1);
+        }
+        for (let i = 0; i < 16; i += 4) m.pattern.kick[i] = m.pattern.kick[i] || (this.hooks.genre().drums.kick || '')[i] === 'x' ? 1 : 0;
       }
       if (a === 'mute') { m.setMuted(!m.muted); n.el.classList.toggle('muted', m.muted); }
       if (a === 'codex') { this.hooks.openCodex(g.id); return; }
       if (a === 'release') { this.hooks.release(g.id); return; }
-      this.renderInspector(); this.changed();
+      this.renderInspector(); this.changed(); this.hooks.onParam && this.hooks.onParam(id);
     });
     this.bindSteps(m);
   }
 
+  syncXY(m) {
+    const dot = this.inspector.querySelector('.xy i');
+    if (dot) { dot.style.left = m.p.cutoff * 100 + '%'; dot.style.top = (1 - m.p.mix) * 100 + '%'; }
+  }
+
   stepsHTML(m) {
     if (m.kind === 'DRUM') {
-      return ['kick', 'clap', 'hat'].map(row => `<div class="drow"><span>${row.toUpperCase()}</span>${m.pattern[row].map((on, i) => `<button class="st ${on ? 'on' : ''} ${i % 4 === 0 ? 'beat' : ''}" data-row="${row}" data-i="${i}"></button>`).join('')}</div>`).join('');
+      return DRUM_ROWS.map(row => `<div class="drow"><span>${row.toUpperCase()}</span>${m.pattern[row].map((v, i) => `<button class="st ${v ? 'on' : ''} ${v === 0.5 ? 'soft' : ''} ${i % 4 === 0 ? 'beat' : ''}" data-row="${row}" data-i="${i}"></button>`).join('')}</div>`).join('');
     }
     return `<div class="drow mel">${m.pattern.map((s, i) => `<button class="st ${s.on ? 'on' : ''} ${i % 4 === 0 ? 'beat' : ''}" data-i="${i}" style="--h:${s.on ? 20 + ((s.deg % 14 + 14) % 14) * 5.5 : 0}%"><i></i></button>`).join('')}</div>`;
   }
@@ -306,7 +363,7 @@ export class Lab {
       const i = +b.dataset.i;
       const act = e => {
         e.preventDefault();
-        if (m.kind === 'DRUM') { const row = b.dataset.row; m.pattern[row][i] = !m.pattern[row][i]; }
+        if (m.kind === 'DRUM') { const row = b.dataset.row, v = m.pattern[row][i]; m.pattern[row][i] = v === 0 ? 1 : v === 1 ? 0.5 : 0; }
         else {
           const s = m.pattern[i];
           const up = e.button === 2 || e.shiftKey, down = e.altKey;
@@ -322,15 +379,26 @@ export class Lab {
     });
   }
 
+  // A new genre: every ghost and the drum re-learn their parts (unless locked)
+  regroove(genre) {
+    for (const [id, n] of this.nodes) {
+      const m = this.engine.modules.get(id);
+      if (!m) continue;
+      if (n.ghost) m.pattern = genPattern(n.ghost.cls, n.ghost, this.salt[id] || 0, genre);
+      if (n.drum) m.pattern = drumPattern(genre);
+    }
+    this.renderInspector();
+  }
+
   playhead(step) {
     this.inspector.querySelectorAll('.drow').forEach(r => r.querySelectorAll('.st').forEach((b, i) => b.classList.toggle('ph', i === step)));
   }
 
   serialize() {
     const nodes = {};
-    for (const [id, n] of this.nodes) if (!n.master) nodes[id] = { x: Math.round(n.x), y: Math.round(n.y), state: this.engine.modules.get(id).serialize() };
+    for (const [id, n] of this.nodes) if (!n.master && !n.analog) nodes[id] = { x: Math.round(n.x), y: Math.round(n.y), state: this.engine.modules.get(id).serialize() };
     const cables = [];
-    for (const m of this.engine.modules.values()) for (const d of m.dests) cables.push([m.id, d]);
+    for (const m of this.engine.modules.values()) if (m.kind !== 'ANALOG') for (const d of m.dests) cables.push([m.id, d]);
     return { nodes, cables };
   }
 }

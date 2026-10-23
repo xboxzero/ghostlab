@@ -1,6 +1,9 @@
 // GHOST LAB — Codex of the Restless Dead
-// Line format: Name|Origin|Class|First-recorded year (negative = BCE)|Lore
+// Line format: Name|Origin|Class|Approx. first-recorded year (negative = BCE)|Short legend
+// Every entry is matched to a Wikipedia article in wiki.js (lead text, link, Commons image).
 import { hash, rng } from './rng.js';
+import { WIKI } from './wiki.js';
+import { traitsOf } from './traits.js';
 
 export const REALMS = {
   EAST:     { name: 'Lantern Courts of the East',  short: 'East Asia',            color: '#e04848', angle: 0 },
@@ -104,7 +107,6 @@ Phi Hua Khat|Thailand|REVENANT|1800|A headless ghost carrying its head in its ha
 Phi Tai Thang Klom|Thailand|WRAITH|1700|The ghost of a mother who died pregnant, feared for her immense power.
 Kuman Thong|Thailand|POLTERGEIST|1700|A golden child spirit kept in a shrine, said to bring luck and warnings.
 Phi Ban Phi Ruean|Thailand|SPECTER|1500|Ancestral house spirits, honoured with offerings at miniature spirit houses.
-Phi Phraya|Thailand|SHADE|1600|A spirit of the old roads that misleads night travellers.
 Phi Phong|Thailand|SHADE|1600|A foul-smelling forest spirit that drinks from the mouths of sleepers.
 Manananggal|Philippines|SHADE|1600|A woman who severs her upper torso and flies on bat wings, leaving her legs behind.
 Aswang|Philippines|REVENANT|1500|A shapeshifting flesh-eater that hides among villagers by day.
@@ -125,7 +127,6 @@ Wewe Gombel|Indonesia|PHANTOM|1800|A spirit who hides neglected children until t
 Sundel Bolong|Indonesia|PHANTOM|1800|A beautiful woman whose long hair hides a gaping hole in her back.
 Leyak|Indonesia|SHADE|1000|A Balinese witch whose flying head trails its organs through the graveyards.
 Rangda|Indonesia|SHADE|1000|The Balinese demon queen of the leyak, eternal foe of the Barong.
-Banaspati|Indonesia|SPECTER|1600|A fire spirit that walks on its hands and burns those it touches.
 Kuyang|Indonesia|SHADE|1700|A Borneo head-spirit that flies with its organs dangling.
 Jenglot|Indonesia|REVENANT|1990|A tiny mummified humanoid with long hair and fangs, said to drink blood.
 Penanggalan|Malaysia|SHADE|1600|A detached flying head with entrails, soaked in vinegar to fit back in its body.
@@ -136,16 +137,10 @@ Langsuir|Malaysia|BANSHEE|1700|A flying woman with long nails and green robes wh
 Pelesit|Malaysia|POLTERGEIST|1700|A grasshopper familiar sent to harm on its keeper's orders.
 Hantu Tinggi|Malaysia|SHADE|1800|A ghost taller than the trees that grows if you look up at it.
 Hantu Kopek|Malaysia|PHANTOM|1800|A spirit that hides children who stay out after dusk.
-Ma Da|Vietnam|WRAITH|1500|A drowned spirit that pulls swimmers down to take its place.
 Ma Lai|Vietnam|SHADE|1500|A head that leaves its body at night to feed.
-Con Tinh|Vietnam|PHANTOM|1500|The spirit of a girl who died young, dwelling in trees.
 Ap|Cambodia|SHADE|1500|A Khmer floating female head with trailing organs.
-Preay|Cambodia|BANSHEE|1500|The ghost of a woman who died violently, screaming in the trees.
 Kun Krak|Cambodia|POLTERGEIST|1600|A child spirit kept as a protective charm.
-Phi Kongkoi|Laos|BANSHEE|1500|A one-legged forest ghost whose cry of kong-koi echoes at night.
 Thaye|Myanmar|REVENANT|1000|A giant ghost of a violent death, haunting the place it fell.
-Ma Phae Wa|Myanmar|SPECTER|1000|The guardian spirit of cemeteries, honoured before burials.
-Thabet|Myanmar|BANSHEE|1000|The ghost of a woman who died in childbirth, tall with a long tongue.
 `,
 SOUTH: `
 Bhoot|India|SPECTER|0|The restless soul of one who died untimely, with backward-turned feet and no shadow.
@@ -161,31 +156,21 @@ Nishi|India|BANSHEE|1600|A night spirit that calls you by name in a loved one's 
 Aleya|India|SPECTER|1700|Marsh lights in Bengal that mislead fishermen into drowning.
 Brahmarakshas|India|SHADE|500|A learned Brahmin who misused his knowledge, reborn as a demon.
 Preta|India|SHADE|-500|A hungry ghost with a tiny mouth and endless hunger.
-Mohini|India|PHANTOM|1500|The seductive spirit of a woman who died unfulfilled.
 Bhangarh Fort Spirits|India|SPECTER|1600|The ghosts of a fort cursed by a sorcerer, where entering after sunset is forbidden.
 Dow Hill Headless Boy|India|SPECTER|1900|A headless boy who walks the forests of Kurseong and vanishes into the trees.
 Narayanrao of Shaniwar Wada|India|BANSHEE|1773|A murdered teenage Peshwa whose cries are said to echo at the full moon.
 Kuldhara Curse|India|WRAITH|1825|A village abandoned overnight, cursed so that none may settle there again.
 Nale Ba|India|BANSHEE|1990|A witch who knocks with a loved one's voice; Bangalore houses wrote 'come tomorrow' on their doors.
 Yakshi|India|PHANTOM|900|A Kerala spirit who seduces men with the scent of jasmine before her true face shows.
-Kollivay Pishachu|India|SPECTER|1600|A Kerala ghost seen as a fire-breathing light over fields.
-Mumiai|India|POLTERGEIST|1700|A stone-throwing spirit that pelts houses from nowhere.
-Pey|India|SHADE|300|Tamil battlefield ghosts with dishevelled hair who feast on the fallen.
-Chordewa|India|YOKAI|1800|A witch's soul that leaves her body as a black cat.
 Kichkanya|Nepal|PHANTOM|1500|The ghost of a girl who died unmarried, with backward feet.
 Murkatta|Nepal|REVENANT|1500|A headless ghost with eyes on its chest.
 Lakhey|Nepal|YOKAI|1000|A fierce red demon who dances through Kathmandu at festival time.
 Bokshi|Nepal|SHADE|1500|A witch-spirit blamed for unexplained illness.
 Riri Yaka|Sri Lanka|SHADE|1500|The blood demon, most feared of the yakku, appearing near death.
-Kalu Kumaraya|Sri Lanka|SHADE|1500|The black prince demon who haunts the dreams of young women.
-Mala Yaka|Sri Lanka|SPECTER|1500|The ghost of a recently dead relative who lingers near home.
-Chalawa|Pakistan|POLTERGEIST|1700|A shapeshifting spirit that steals and confuses.
 Pichal Peri|Pakistan|PHANTOM|1700|A mountain spirit with backward feet who leads climbers astray.
 Mamdo Bhoot|Bangladesh|SPECTER|1700|The ghost of a Muslim man in Bengali lore, said to break necks.
 Yidag|Tibet|SHADE|800|A hungry ghost with a vast belly and a mouth no wider than a needle.
-Dre|Tibet|SHADE|800|Malevolent spirits that cause misfortune and disease.
 Ro-langs|Tibet|REVENANT|800|A corpse that stands up and walks, stiff-limbed and unable to bend.
-Tsen|Tibet|WRAITH|800|Red rock spirits, said to be ghosts of monks who broke their vows.
 `,
 MIDEAST: `
 Ghoul|Arabia|REVENANT|600|A desert fiend that haunts graveyards and lures travellers to devour them.
@@ -193,8 +178,6 @@ Ifrit|Arabia|SHADE|600|A mighty, fiery jinn of the underworld, sometimes tied to
 Nasnas|Yemen|REVENANT|900|Half a human, hopping on one leg with half a head.
 Si'lat|Arabia|PHANTOM|700|A shapeshifting jinn-woman of the wild places.
 Qareen|Arabia|SPECTER|700|A spirit double that accompanies every person through life.
-Umm al-Duwais|UAE|PHANTOM|1800|A beautiful woman with a sickle for a hand, announced by perfume.
-Bu Darya|UAE|SHADE|1800|A sea spirit that calls sailors overboard from the pearl boats.
 Al Naddaha|Egypt|BANSHEE|1900|A voice by the Nile that calls a man by name until he follows.
 Lilitu|Mesopotamia|SHADE|-2000|A night spirit of the wind, haunting the desolate places.
 Gidim|Mesopotamia|WRAITH|-2500|The Sumerian ghost of the dead, angered if denied offerings.
@@ -208,10 +191,7 @@ Shedim|Israel|SHADE|-500|Storm spirits of Jewish folklore with clawed bird feet.
 Ibbur|Israel|SPECTER|1600|A benevolent soul that briefly joins a living person to fulfil a duty.
 Karakoncolos|Turkey|SHADE|1500|A winter goblin that calls people by name on the coldest nights.
 Alkarısı|Turkey|PHANTOM|1300|A spirit with backward feet that harms new mothers.
-Albastı|Kazakhstan|PHANTOM|1300|A Turkic spirit with long hair who preys on women after childbirth.
 Karabasan|Turkey|SPECTER|1500|A dark weight that sits on the chest during sleep paralysis.
-Bakhtak|Iran|SPECTER|1000|A Persian nightmare spirit that crushes sleepers.
-Abu Rijl Maslukha|Levant|REVENANT|1900|The man with the peeled leg, a bogeyman of Levantine childhood.
 Ghost of Nebusemekh|Egypt|WRAITH|-1200|An ancient Egyptian ghost who told the priest Khonsuemheb that his tomb had crumbled.
 `,
 AFRICA: `
@@ -219,12 +199,10 @@ Tokoloshe|South Africa|POLTERGEIST|1800|A small water sprite; beds are raised on
 Grey Lady of the Castle|South Africa|PHANTOM|1700|A weeping grey figure in the Castle of Good Hope, Cape Town.
 Uniondale Hitchhiker|South Africa|PHANTOM|1968|A young woman who vanishes from the back of motorbikes near Uniondale.
 Impundulu|South Africa|SHADE|1800|The lightning bird, a witch's familiar that takes the form of a man.
-Umkhovu|South Africa|REVENANT|1800|A Zulu reanimated corpse forced to serve a sorcerer.
 Asanbosam|Ghana|REVENANT|1700|A forest being that hangs from trees with iron hooks for feet.
 Sasabonsam|Ghana|SHADE|1700|A tall, hairy, bat-winged forest spirit.
 Adze|Togo|SHADE|1800|An Ewe spirit that travels as a firefly and drinks blood.
 Obayifo|Ghana|SHADE|1700|A witch who glows with phosphorescent light as she flies.
-Saman|Ghana|SPECTER|1700|The Akan ghost of the dead, appearing to warn the living.
 Abiku|Nigeria|POLTERGEIST|1600|A Yoruba spirit child who dies and returns to the same mother.
 Ogbanje|Nigeria|POLTERGEIST|1600|An Igbo spirit child who comes and goes between worlds.
 Kishi|Angola|REVENANT|1800|A two-faced being: a handsome man before, a hyena behind.
@@ -234,12 +212,10 @@ Akh|Egypt|SPECTER|-2500|The transfigured spirit of the dead; an angry akh could 
 Ba|Egypt|SPECTER|-2500|The human-headed bird soul that flew out of the tomb by day.
 Aisha Qandisha|Morocco|PHANTOM|1600|A jinniya with goat or camel legs who haunts riverbanks.
 Kalanoro|Madagascar|POLTERGEIST|1700|A small forest being with backward feet and long nails.
-Angatra|Madagascar|SPECTER|1700|The ghost of an ancestor neglected by the living.
 Ramanga|Madagascar|SHADE|1700|A spirit that lives on the blood and nail clippings of nobles.
 Yumboes|Senegal|POLTERGEIST|1800|Silver-haired Wolof spirits of the dead who feast in the hills.
 Shetani|Tanzania|SHADE|1900|Twisting spirits of Makonde carvings, tricksters of the bush.
 Jengu|Cameroon|PHANTOM|1700|Water spirits with long hair and gap-toothed smiles.
-Tikoloshe of the River|Lesotho|POLTERGEIST|1800|A mischievous river spirit summoned by jealous neighbours.
 `,
 EUROPE: `
 Banshee|Ireland|BANSHEE|800|The bean sídhe, whose keening wail foretells a death in the family.
@@ -342,7 +318,6 @@ Queen Mary Ghosts|USA|SPECTER|1967|Spectral passengers aboard the retired ocean 
 Bachelor's Grove Madonna|USA|PHANTOM|1991|A translucent woman photographed on a tombstone near Chicago.
 Old Hag|Canada|SPECTER|1800|A Newfoundland spirit that sits on sleepers' chests.
 Northumberland Strait Ghost Ship|Canada|SPECTER|1786|A burning three-masted ship seen sailing the strait.
-Qivittoq|Greenland|WRAITH|1800|One who fled to the mountains and became a ghost of the wilderness.
 Rolling Calf|Jamaica|SHADE|1700|A fire-eyed calf dragging a chain through the night roads.
 Duppy|Jamaica|SPECTER|1700|The spirit of the dead that wanders if not properly settled.
 Soucouyant|Trinidad|SHADE|1700|An old woman who sheds her skin and flies as a ball of fire.
@@ -361,19 +336,14 @@ La Patasola|Colombia|REVENANT|1700|A one-legged woman of the forest who lures me
 La Luz Mala|Argentina|SPECTER|1800|The evil light of the pampas, a soul in torment.
 Mula sin Cabeza|Brazil|REVENANT|1700|A headless mule breathing fire from its neck.
 Saci|Brazil|POLTERGEIST|1700|A one-legged trickster in a red cap who rides in dust devils.
-Loira do Banheiro|Brazil|POLTERGEIST|1980|The blonde in the school bathroom, summoned by flushing and cursing.
 Corpo Seco|Brazil|REVENANT|1800|A corpse so wicked that the earth refused to rot it.
 Boitatá|Brazil|SPECTER|1560|A fire serpent with burning eyes that guards the fields.
 La Cegua|Costa Rica|REVENANT|1700|A beautiful hitchhiker whose face turns into a horse skull.
 El Cadejo|Guatemala|SHADE|1700|Twin spectral dogs, one white and one black.
 La Siguanaba|El Salvador|PHANTOM|1500|A woman washing at the river who reveals a horse face.
 El Sombrerón|Guatemala|POLTERGEIST|1700|A tiny man in a huge hat who braids horses' manes.
-Tunche|Peru|BANSHEE|1800|An Amazonian spirit known by its eerie whistle in the forest.
-Condenado|Peru|REVENANT|1600|An Andean soul condemned to wander for its sins.
 Anchanchu|Bolivia|SHADE|1600|An Andean spirit of desolate places that brings sickness.
-La Viuda|Chile|PHANTOM|1700|A widow in black who appears to men on lonely roads.
 Caleuche|Chile|SPECTER|1700|A ghost ship of Chiloé, crewed by the drowned, glowing on the water.
-Ánimas|Chile|SPECTER|1600|Souls in purgatory honoured with candles at roadside shrines.
 `,
 OCEANIA: `
 Yara-ma-yha-who|Australia|REVENANT|1800|A small red being with suckers on its fingers that drops from fig trees.
@@ -393,8 +363,6 @@ Taotao Mo'na|Guam|SPECTER|1600|The ancestral spirits of the Chamorro, respected 
 Aitu|Samoa|SPECTER|1000|Spirits of the dead and of place, appeased with respect.
 Teine Sā|Samoa|PHANTOM|1000|Sacred female spirits who punish disrespect, like Saumaiafe.
 Masalai|Papua New Guinea|SHADE|1800|Spirits bound to particular pools, rocks and forests.
-Veli|Fiji|POLTERGEIST|1800|Little forest folk who play tricks on travellers.
-Tūpāpaku|Cook Islands|REVENANT|1700|A corpse-ghost that rises from its grave.
 Tupilaq|Greenland|WRAITH|1800|An avenging creature made from bones and sent against an enemy.
 Mihi Ghost Boat|New Zealand|SPECTER|1886|A phantom war canoe seen on Lake Tarawera before the eruption.
 `,
@@ -411,7 +379,7 @@ const FX_BY_CLASS = {
   SHADE: ['distort', 'crush', 'phaser', 'reverb'],
 };
 
-const REALM_SCALE_SHIFT = { EAST: 0, SEA: 0, SOUTH: 0, MIDEAST: 0, AFRICA: 0, EUROPE: 0, AMERICAS: 0, OCEANIA: 0 };
+const FX2 = ['none', 'none', 'none', 'wah', 'comb', 'flanger', 'pingpong', 'tape'];
 
 export const GHOSTS = [];
 for (const [realm, block] of Object.entries(RAW)) {
@@ -429,9 +397,13 @@ for (const [realm, block] of Object.entries(RAW)) {
       wail: 1 + Math.floor(r() * 5),
       speed: 1 + Math.floor(r() * 5),
       fx: r() < 0.6 ? fxList[0] : fxList[1 + Math.floor(r() * (fxList.length - 1))],
+      fx2: FX2[Math.floor(r() * FX2.length)],
       octave: Math.floor(r() * 2),
-      degree: Math.floor(r() * 7) + REALM_SCALE_SHIFT[realm],
+      degree: Math.floor(r() * 7),
+      wiki: WIKI[name] || null,
     });
+    const g = GHOSTS[GHOSTS.length - 1];
+    g.traits = traitsOf(g);
   }
 }
 

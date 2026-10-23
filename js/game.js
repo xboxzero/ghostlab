@@ -1,7 +1,8 @@
 // GHOST LAB — game state, souls economy, rites and saving.
 import { GHOSTS, REALMS } from './data.js';
 
-const SAVE_KEY = 'ghostlab-save-v1';
+const SAVE_KEY = 'ghostlab-save-v2';
+const OLD_KEYS = ['ghostlab-save-v1'];
 const STARTERS = ['Yūrei', 'Krasue', 'Headless Horseman'];
 
 export const RITES = [
@@ -18,6 +19,11 @@ export const RITES = [
   { id: 'night', name: 'The Long Night', desc: 'Play 128 bars in total.', reward: 300, check: s => s.bars >= 128 },
   { id: 'scholar', name: 'Codex Scholar', desc: 'Read 50 Codex entries.', reward: 300, check: s => s.seen.length >= 50 },
   { id: 'world', name: 'World Séance', desc: 'Bind a ghost from every one of the 8 realms.', reward: 800, check: (s, x) => x.realms >= 8 },
+  { id: 'pilgrim2', name: 'Sound Pilgrim', desc: 'Play at least 4 bars in 5 different genres from Sound History.', reward: 300, check: s => Object.values(s.genreBars).filter(b => b >= 4).length >= 5 },
+  { id: 'south', name: 'Global South Tour', desc: 'Play 4+ bars of genres from Africa, the Americas, South Asia and Southeast Asia.', reward: 500, check: s => ['AFRICA', 'AMERICAS', 'SOUTH', 'SEA'].every(r => s.regionBars[r] >= 4) },
+  { id: 'solo', name: 'Hand on the Faders', desc: 'Solo a channel in the Mixer.', reward: 100, check: s => !!s.flags.solo },
+  { id: 'glitch', name: 'Glitch in the Machine', desc: 'Hold a performance pad (Stutter, Gate, Wash or Crush) while playing.', reward: 150, check: s => !!s.flags.perf },
+  { id: 'analog', name: 'Analog Séance', desc: 'Connect a hardware synth through the Analog In.', reward: 400, check: s => !!s.flags.analog },
   { id: 'lord', name: 'Lord of Cinders', desc: 'Hoard 5000 souls.', reward: 0, check: s => s.souls >= 5000 },
 ];
 
@@ -27,10 +33,18 @@ export class Game {
   }
   fresh() {
     const bound = STARTERS.map(n => GHOSTS.find(g => g.name === n).id);
-    return { souls: 300, bound, seen: [], rites: [], bars: 0, fastBars: 0, erasVisited: [3], era: 3, bpm: 128, lab: null, totalEarned: 0 };
+    return {
+      souls: 300, bound, seen: [], rites: [], bars: 0, fastBars: 0, erasVisited: [3], era: 3, bpm: 126, lab: null, totalEarned: 0,
+      genre: 'gqom', root: 45, genreBars: {}, regionBars: {}, flags: {}, analog: null, mixer: null,
+    };
   }
   load() {
-    try { const raw = localStorage.getItem(SAVE_KEY); if (raw) return Object.assign(this.fresh(), JSON.parse(raw)); } catch (e) { }
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) return Object.assign(this.fresh(), JSON.parse(raw));
+      // The codex was rebuilt around Wikipedia references, so old ghost ids no longer line up.
+      if (OLD_KEYS.some(k => localStorage.getItem(k))) { this.migrated = true; OLD_KEYS.forEach(k => localStorage.removeItem(k)); }
+    } catch (e) { }
     return null;
   }
   save(lab) {
@@ -67,6 +81,10 @@ export class Game {
     this.s.souls += earned; this.s.totalEarned += earned;
     this.s.bars++;
     if (engine.bpm >= 140) this.s.fastBars++;
+    if (this.genre) {
+      this.s.genreBars[this.genre.id] = (this.s.genreBars[this.genre.id] || 0) + 1;
+      if (this.genre.id !== 'detroit') this.s.regionBars[this.genre.region] = (this.s.regionBars[this.genre.region] || 0) + 1;
+    }
     this.lastResonance = resonance;
     return earned;
   }
